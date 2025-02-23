@@ -13,8 +13,8 @@ This is an Express.js authentication API using JWT (JSON Web Token) and bcrypt f
 ### **1. Clone the Repository**
 
 ```sh
-git clone https://github.com/your-repo/expense-tracker-auth.git
-cd jwt-auth-example
+git clone https://github.com/julioaraujo96/jwt-auth-example.git
+cd jwt-auth-example/server
 ```
 
 ### **2. Install Dependencies**
