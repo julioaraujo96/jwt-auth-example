@@ -5,7 +5,7 @@
   "main": "main.ts",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "setup": "prisma generate && prisma db push",
+    "db:setup": "prisma generate && prisma db push",
     "dev": "ts-node --project tsconfig.json --files main.ts",
     "debug": "node --inspect --require ts-node/register main.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
