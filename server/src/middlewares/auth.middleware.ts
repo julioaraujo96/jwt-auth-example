@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { verifyToken } from '../utils/jwt';
-import { JWTPayload } from '../types/jwt';
+import { JWTPayload, TokenType } from '../types/jwt';
 
 declare global {
   namespace Express {
@@ -30,7 +30,7 @@ export const authenticate = (
   }
 
   try {
-    const payload = verifyToken(token) as JWTPayload;
+    const payload = verifyToken(token, TokenType.ACCESS) as JWTPayload;
     req.user = payload;
     next();
   } catch (error) {

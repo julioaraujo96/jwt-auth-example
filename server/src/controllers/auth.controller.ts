@@ -1,16 +1,39 @@
 import { userRepository } from './../repositories/user.repo';
-import { generateToken } from '../utils/jwt';
-import { Request, Response } from 'express';
+import {
+  generateRefreshToken,
+  generateToken,
+  invalidateAllUserRefreshTokens,
+  invalidateRefreshToken,
+  verifyRefreshToken,
+  verifyToken,
+} from '../utils/jwt';
+import { CookieOptions, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import { verify } from 'crypto';
+import { TokenType } from '../types/jwt';
 
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10');
+const REFRESH_TOKEN_COOKIE_NAME = 'refreshToken';
+
+// Cookie options for refresh token
+const refreshTokenCookieOptions: CookieOptions = {
+  httpOnly: true, // Prevents JavaScript access
+  secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+  sameSite: 'strict', // Prevents CSRF attacks
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  path: '/api/auth', // Only accessible by auth routes
+};
 
 /**
- * Register endpoint.
+ * Registers a new user.
  *
- * Registers a new user with the given email and password.
- * If the email already exists, it returns a 400 status with a message.
- * If the combination is valid, it generates a JWT token and returns it.
+ * @param {Request} req The request object
+ * @param {Response} res The response object
+ *
+ * @returns {Promise<void>} A promise that resolves to nothing
+ *
+ * @throws {Error} If the user already exists
+ * @throws {Error} If there is an internal server error
  */
 export const register = async (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -28,22 +51,32 @@ export const register = async (req: Request, res: Response) => {
       password: passwordHash,
     });
 
-    const token = generateToken(user.id);
+    const accessToken = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
 
-    res.status(201).json({ token });
+    res.cookie(
+      REFRESH_TOKEN_COOKIE_NAME,
+      refreshToken,
+      refreshTokenCookieOptions
+    );
+
+    res.status(201).json({ token: accessToken });
   } catch (error) {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 /**
- * Login endpoint.
+ * Logs in a user.
  *
- * Checks if the given email and password combination is valid.
- * If the combination is valid, it generates a JWT token and returns it.
- * The token can be used to authenticate requests to protected routes.
- * If the combination is invalid, it returns a 401 status.
- * If an unexpected error occurs, it returns a 500 status.
+ * @param {Request} req The request object
+ * @param {Response} res The response object
+ *
+ * @returns {Promise<void>} A promise that resolves to nothing
+ *
+ * @throws {Error} If the user does not exist
+ * @throws {Error} If the password is invalid
+ * @throws {Error} If there is an internal server error
  */
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -61,10 +94,131 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid password' });
     }
 
-    const token = generateToken(user.id);
+    const accessToken = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
 
-    res.status(200).json({ token });
+    res.cookie(
+      REFRESH_TOKEN_COOKIE_NAME,
+      refreshToken,
+      refreshTokenCookieOptions
+    );
+
+    res.status(200).json({ token: accessToken });
   } catch (error) {
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Refresh a user's access token.
+ *
+ * @param {Request} req The request object
+ * @param {Response} res The response object
+ *
+ * @returns {Promise<void>} A promise that resolves to nothing
+ *
+ * @throws {Error} If there is an internal server error
+ */
+export const refreshAccessToken = async (req: Request, res: Response) => {
+  const refreshToken = req.cookies[REFRESH_TOKEN_COOKIE_NAME];
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  try {
+    const userId = await verifyRefreshToken(refreshToken);
+
+    if (!userId) {
+      //clear invalid cookie
+      res.clearCookie(REFRESH_TOKEN_COOKIE_NAME);
+
+      return res
+        .status(401)
+        .json({ message: 'Unauthorized. Refresh token invalid' });
+    }
+
+    await invalidateRefreshToken(refreshToken);
+
+    //Generate new tokens
+    const accessToken = generateToken(userId);
+    const newRefreshToken = generateRefreshToken(userId);
+
+    res.cookie(
+      REFRESH_TOKEN_COOKIE_NAME,
+      newRefreshToken,
+      refreshTokenCookieOptions
+    );
+
+    res.status(200).json({ token: accessToken });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Logs out the user by invalidating the refresh token cookie.
+ *
+ * This function extracts the refresh token from the cookie, invalidates it,
+ * and clears the cookie.
+ *
+ * @param {Request} req - The request object containing the refresh token cookie.
+ * @param {Response} res - The response object used to send the HTTP response.
+ *
+ * @returns {Promise<void>} A promise that resolves to nothing.
+ *
+ * @throws {Error} If there is an internal server error.
+ */
+export const logout = async (req: Request, res: Response) => {
+  const refreshToken = req.cookies[REFRESH_TOKEN_COOKIE_NAME];
+
+  if (refreshToken) {
+    // Invalidate the refresh token
+    await invalidateRefreshToken(refreshToken);
+  }
+
+  // Clear the cookie regardless of whether the token existed
+  res.clearCookie(REFRESH_TOKEN_COOKIE_NAME);
+
+  res.status(200).json({ message: 'Logged out successfully' });
+};
+
+/**
+ * Logs out the user from all devices by invalidating all refresh tokens associated with the user.
+ *
+ * This function extracts the access token from the `Authorization` header, verifies it,
+ * and uses the user ID from the token to invalidate all refresh tokens for that user.
+ * It also clears the refresh token cookie and returns a success message.
+ *
+ * @param {Request} req - The request object containing headers and cookies.
+ * @param {Response} res - The response object used to send the HTTP response.
+ *
+ * @returns {Promise<void>} A promise that resolves to nothing.
+ *
+ * @throws {Error} If the access token is missing or invalid, or if there is an internal server error.
+ */
+export const logoutAll = async (req: Request, res: Response) => {
+  try {
+    const accessToken = req.headers.authorization?.split(' ')[1];
+
+    if (!accessToken) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const payload = verifyToken(accessToken, TokenType.ACCESS);
+    const userId = payload.userId;
+
+    if (userId) {
+      // Invalidate all refresh tokens for this user
+      await invalidateAllUserRefreshTokens(userId);
+    }
+
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME);
+    res
+      .status(200)
+      .json({ message: 'Logged out from all devices successfully' });
+  } catch (error) {
+    console.error('Logout all error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
