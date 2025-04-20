@@ -9,7 +9,6 @@ import {
 } from '../utils/jwt';
 import { CookieOptions, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { verify } from 'crypto';
 import { TokenType } from '../types/jwt';
 
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10');

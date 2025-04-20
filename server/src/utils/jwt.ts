@@ -1,6 +1,7 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { JWTPayload, TokenType } from '../types/jwt';
 import { prisma } from '../utils/db';
+import crypto from 'crypto';
 
 const JWT_EXPIRATION_TIME = process.env.JWT_LIFETIME || '5m';
 const JWT_REFRESH_EXPIRATION_TIME = process.env.JWT_REFRESHLIFETIME || '1d';
