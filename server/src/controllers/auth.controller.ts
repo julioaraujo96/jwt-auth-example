@@ -51,7 +51,7 @@ export const register = async (req: Request, res: Response) => {
     });
 
     const accessToken = generateToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
+    const refreshToken = await generateRefreshToken(user.id);
 
     res.cookie(
       REFRESH_TOKEN_COOKIE_NAME,
@@ -94,7 +94,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const accessToken = generateToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
+    const refreshToken = await generateRefreshToken(user.id);
 
     res.cookie(
       REFRESH_TOKEN_COOKIE_NAME,
@@ -130,8 +130,7 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
 
     if (!userId) {
       //clear invalid cookie
-      res.clearCookie(REFRESH_TOKEN_COOKIE_NAME);
-
+      res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: refreshTokenCookieOptions.path });
       return res
         .status(401)
         .json({ message: 'Unauthorized. Refresh token invalid' });
@@ -141,7 +140,7 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
 
     //Generate new tokens
     const accessToken = generateToken(userId);
-    const newRefreshToken = generateRefreshToken(userId);
+    const newRefreshToken = await generateRefreshToken(userId);
 
     res.cookie(
       REFRESH_TOKEN_COOKIE_NAME,
@@ -177,8 +176,7 @@ export const logout = async (req: Request, res: Response) => {
   }
 
   // Clear the cookie regardless of whether the token existed
-  res.clearCookie(REFRESH_TOKEN_COOKIE_NAME);
-
+  res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: refreshTokenCookieOptions.path });
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
@@ -212,8 +210,7 @@ export const logoutAll = async (req: Request, res: Response) => {
       await invalidateAllUserRefreshTokens(userId);
     }
 
-    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME);
-    res
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: refreshTokenCookieOptions.path });    res
       .status(200)
       .json({ message: 'Logged out from all devices successfully' });
   } catch (error) {

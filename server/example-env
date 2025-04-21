@@ -1,7 +1,7 @@
 PORT=3000
 
 JWT_SECRET=your_jwt_secret_here
-REFRESH_TOKEN_SECRET=your_different_refresh_token_secret_here
+JWT_REFRESH_SECRET=your_different_refresh_token_secret_here
 JWT_LIFETIME=5m
 JWT_REFRESHLIFETIME=7d
 BCRYPT_SALT_ROUNDS=10

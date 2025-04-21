@@ -36,7 +36,7 @@ export const generateToken = (userId: string): string => {
 export const verifyToken = (token: string, type: TokenType): JWTPayload => {
   const secret =
     type === TokenType.REFRESH
-      ? process.env.REFRESH_TOKEN_SECRET
+      ? process.env.JWT_REFRESH_SECRET
       : process.env.JWT_SECRET;
 
   if (!secret) throw new Error(`Secret for ${type} tokens is not defined`);
@@ -47,20 +47,20 @@ export const verifyToken = (token: string, type: TokenType): JWTPayload => {
 /**
  * Generates a refresh token for the given user ID.
  *
- * The token is signed with the REFRESH_TOKEN_SECRET environment variable and
+ * The token is signed with the JWT_REFRESH_SECRET environment variable and
  * expires after the time specified in the REFRESH_TOKEN_EXPIRATION environment
  * variable. The token is also stored in the database for revocation.
  *
  * The token is a JWT token with a unique ID claim (standard JWT claim `jti`) that
  * is used to identify the token in the database.
  *
- * @throws {Error} If the REFRESH_TOKEN_SECRET environment variable is not defined
+ * @throws {Error} If the JWT_REFRESH_SECRET environment variable is not defined
  */
 export const generateRefreshToken = async (userId: string): Promise<string> => {
-  const secret = process.env.REFRESH_TOKEN_SECRET;
+  const secret = process.env.JWT_REFRESH_SECRET;
 
   if (!secret) {
-    throw new Error('REFRESH_TOKEN_SECRET is not defined');
+    throw new Error('JWT_REFRESH_SECRET is not defined');
   }
 
   const jti = crypto.randomUUID();
